@@ -21,6 +21,18 @@
 set -Ee
 
 #[
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${SRC_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+OUT_DIR="${OUT_DIR:-$SRC_DIR/out}"
+TOOLS_DIR="${TOOLS_DIR:-$OUT_DIR/tools/bin}"
+export PATH="$TOOLS_DIR:$PATH"
+[ -f "$OUT_DIR/config.sh" ] && { set -a; source "$OUT_DIR/config.sh"; set +a; }
+WORK_DIR="${WORK_DIR:-$OUT_DIR/work_dir}"
+TMP_DIR="${TMP_DIR:-$OUT_DIR/tmp}"
+APKTOOL_DIR="${APKTOOL_DIR:-$OUT_DIR/apktool}"
+FW_DIR="${FW_DIR:-$OUT_DIR/fw}"
+export SRC_DIR OUT_DIR TOOLS_DIR WORK_DIR TMP_DIR APKTOOL_DIR FW_DIR
+
 source "$SRC_DIR/scripts/utils/module_utils.sh"
 
 READ_AND_APPLY_PROPS()
@@ -52,13 +64,15 @@ READ_AND_APPLY_PROPS()
 
 APPLY_SMALI_PATCHES()
 {
-    local PATCHES_PATH="$1"
+    local PATCHES_PATH
+    PATCHES_PATH="$(cd "$1" && pwd)"
     local TARGET="$2"
 
     [ ! -d "$APKTOOL_DIR$TARGET" ] && bash "$SRC_DIR/scripts/apktool.sh" d "$TARGET"
 
     cd "$APKTOOL_DIR$TARGET"
     while read -r patch; do
+        [ -z "$patch" ] && continue
         local OUT
         local COMMIT_NAME
         COMMIT_NAME="$(grep "^Subject:" "$patch" | sed 's/.*PATCH] //')"
@@ -133,8 +147,11 @@ elif [ ! -d "$1" ]; then
     exit 1
 fi
 
+MODULES_DIR="$(cd "$1" && pwd)"
+
 while read -r i; do
+    [ -z "$i" ] && continue
     APPLY_MODULE "$i"
-done <<< "$(find "$1" -mindepth 1 -maxdepth 1 -type d | sort)"
+done <<< "$(find "$MODULES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)"
 
 exit 0

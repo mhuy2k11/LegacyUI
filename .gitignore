@@ -1,14 +1,38 @@
+# Output directories
 out/
+tmp/
+tmp_out/
 
-# Cert
+# Log files
+*.log
+
+# Editor & OS temporary/backup files
+*.orig
+*.bak
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Cert & Signing keys
 security/unica_ota.x509.pem
 security/unica_ota.pk8
 security/unica_platform.x509.pem
 security/unica_platform.pk8
+*.keystore
+*.jks
 
-#
-# We don't want to ignore the following even if they are dot-files
-#
+# Local helper scripts
+scripts/make_only.sh
+
+# Do not ignore dot-files
 !.gitattributes
 !.gitignore
 !.gitmodules

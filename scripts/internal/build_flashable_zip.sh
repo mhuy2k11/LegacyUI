@@ -20,6 +20,19 @@
 
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${SRC_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+OUT_DIR="${OUT_DIR:-$SRC_DIR/out}"
+TOOLS_DIR="${TOOLS_DIR:-$OUT_DIR/tools/bin}"
+export PATH="$TOOLS_DIR:$PATH"
+[ -f "$OUT_DIR/config.sh" ] && { set -a; source "$OUT_DIR/config.sh"; set +a; }
+WORK_DIR="${WORK_DIR:-$OUT_DIR/work_dir}"
+TMP_DIR="${TMP_DIR:-$OUT_DIR/tmp}"
+TARGET_CODENAME="${TARGET_CODENAME:-a70q}"
+ROM_VERSION="${ROM_VERSION:-1.0.0}"
+ROM_BUILD_TIMESTAMP="${ROM_BUILD_TIMESTAMP:-$(date +%s)}"
+TARGET_OS_FILE_SYSTEM="${TARGET_OS_FILE_SYSTEM:-erofs}"
+
 # [
 GET_PROP()
 {
@@ -96,6 +109,7 @@ GENERATE_UPDATER_SCRIPT()
     local SCRIPT_FILE="$TMP_DIR/META-INF/com/google/android/updater-script"
     local PARTITION_COUNT=0
     local HAS_BOOT=false
+    local HAS_DTBO=false
     local HAS_SYSTEM=false
     local HAS_VENDOR=false
     local HAS_PRODUCT=false
@@ -137,8 +151,8 @@ GENERATE_UPDATER_SCRIPT()
             echo -e "\n# Patch partition product\n"
             echo    'ui_print("Patching product image unconditionally...");'
             echo    'show_progress(0.100000, 0);'
-            echo    'block_image_update("/dev/block/platform/soc/1d84000.ufshc/by-name/product", package_extract_file("product.transfer.list"), "vendor.new.dat.br", "product.patch.dat") ||'
-            echo    '  abort("E2001: Failed to update product image.");'
+            echo    'block_image_update("/dev/block/platform/soc/1d84000.ufshc/by-name/product", package_extract_file("product.transfer.list"), "product.new.dat.br", "product.patch.dat") ||'
+            echo    '  abort("E3001: Failed to update product image.");'
         fi
         if $HAS_DTBO; then
             echo    'ui_print("Full Patching dtbo.img img...");'
@@ -198,8 +212,10 @@ while read -r i; do
 done <<< "$(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -type d)"
 
 echo "Copying prebuilt images"
-lz4 -c -d $SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/product.img.lz4 >> $TMP_DIR/product.img
-lz4 -c -d -m $SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/vendor/vendor.img.* >> $TMP_DIR/vendor.img
+[ -f "$TMP_DIR/product.img" ] && rm -f "$TMP_DIR/product.img"
+[ -f "$TMP_DIR/vendor.img" ] && rm -f "$TMP_DIR/vendor.img"
+lz4 -c -d -f "$SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/product.img.lz4" >> "$TMP_DIR/product.img"
+lz4 -c -d -f -m "$SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/vendor/vendor.img."* >> "$TMP_DIR/vendor.img"
 
 while read -r i; do
     PARTITION="$(basename "$i" | sed "s/.img//g")"
@@ -212,7 +228,7 @@ while read -r i; do
     fi
 
     echo "Converting $PARTITION.img to $PARTITION.new.dat"
-    img2sdat -o "$TMP_DIR" "$i" > /dev/null 2>&1 \
+    img2sdat -o "$TMP_DIR" "$i" \
         && rm "$i"
     echo "Compressing $PARTITION.new.dat"
     brotli --quality=6 --output="$TMP_DIR/$PARTITION.new.dat.br" "$TMP_DIR/$PARTITION.new.dat" \
@@ -220,8 +236,8 @@ while read -r i; do
 done <<< "$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type f -name "*.img")"
 
 echo "Copying prebuilt kernel"
-lz4 -d $SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/boot.img.lz4 $TMP_DIR/boot.img
-lz4 -d $SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/dtbo.img.lz4 $TMP_DIR/dtbo.img
+lz4 -d -f "$SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/boot.img.lz4" "$TMP_DIR/boot.img"
+lz4 -d -f "$SRC_DIR/target/$TARGET_CODENAME/prebuilt_images/dtbo.img.lz4" "$TMP_DIR/dtbo.img"
 
 echo "Generating updater-script"
 GENERATE_UPDATER_SCRIPT

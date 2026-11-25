@@ -20,7 +20,19 @@ set -Eeuo pipefail
 START=$SECONDS
 
 # [
-COMMIT_HASH="$(git rev-parse HEAD)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${SRC_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+OUT_DIR="${OUT_DIR:-$SRC_DIR/out}"
+TOOLS_DIR="${TOOLS_DIR:-$OUT_DIR/tools/bin}"
+export PATH="$TOOLS_DIR:$PATH"
+[ -f "$OUT_DIR/config.sh" ] && { set -a; source "$OUT_DIR/config.sh"; set +a; }
+WORK_DIR="${WORK_DIR:-$OUT_DIR/work_dir}"
+TMP_DIR="${TMP_DIR:-$OUT_DIR/tmp}"
+APKTOOL_DIR="${APKTOOL_DIR:-$OUT_DIR/apktool}"
+FW_DIR="${FW_DIR:-$OUT_DIR/fw}"
+export SRC_DIR OUT_DIR TOOLS_DIR WORK_DIR TMP_DIR APKTOOL_DIR FW_DIR
+
+COMMIT_HASH="$(git -C "$SRC_DIR" rev-parse HEAD)"
 CONFIG_HASH="$(sed '/ROM_BUILD_TIMESTAMP/d' "$OUT_DIR/config.sh" | sha1sum | cut -d " " -f 1)"
 WORK_DIR_HASH="$(echo -n "$COMMIT_HASH$CONFIG_HASH" | sha1sum | cut -d " " -f 1)"
 # ]
@@ -64,8 +76,9 @@ fi
 
 if $BUILD_ROM; then
     NEED_FW_DOWNLOAD=false
-    bash "$SRC_DIR/scripts/extract_fw.sh" &> /dev/null || NEED_FW_DOWNLOAD=true
+    bash "$SRC_DIR/scripts/extract_fw.sh" || NEED_FW_DOWNLOAD=true
     if $NEED_FW_DOWNLOAD; then
+        echo "Firmware extraction failed or firmware missing. Trying download..."
         bash "$SRC_DIR/scripts/download_fw.sh"
         bash "$SRC_DIR/scripts/extract_fw.sh"
     fi
@@ -83,8 +96,9 @@ if $BUILD_ROM; then
 
     echo -e "\n- Recompiling APKs/JARs..."
     while read -r i; do
+        [ -z "$i" ] && continue
         bash "$SRC_DIR/scripts/apktool.sh" b "$i"
-    done <<< "$(find "$OUT_DIR/apktool" -type d \( -name "*.apk" -o -name "*.jar" \) -printf "%p\n" | sed "s.$OUT_DIR/apktool..")"
+    done <<< "$(find "$OUT_DIR/apktool" -type d \( -name "*.apk" -o -name "*.jar" \) -printf "%p\n" 2>/dev/null | sed "s.$OUT_DIR/apktool.." || true)"
 
     echo ""
     echo -n "$WORK_DIR_HASH" > "$WORK_DIR/.completed"

@@ -19,6 +19,17 @@
 set -eu
 shopt -s nullglob
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${SRC_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+OUT_DIR="${OUT_DIR:-$SRC_DIR/out}"
+TOOLS_DIR="${TOOLS_DIR:-$OUT_DIR/tools/bin}"
+export PATH="$TOOLS_DIR:$PATH"
+[ -f "$OUT_DIR/config.sh" ] && { set -a; source "$OUT_DIR/config.sh"; set +a; }
+WORK_DIR="${WORK_DIR:-$OUT_DIR/work_dir}"
+APKTOOL_DIR="${APKTOOL_DIR:-$OUT_DIR/apktool}"
+TARGET_HAS_SYSTEM_EXT="${TARGET_HAS_SYSTEM_EXT:-false}"
+TARGET_HAS_PRODUCT="${TARGET_HAS_PRODUCT:-false}"
+
 # [
 PRINT_USAGE()
 {
@@ -236,7 +247,7 @@ DO_RECOMPILE()
     done
 
     mkdir -p "$APKTOOL_DIR$IN_DIR/build/apk"
-    cp -a --preserve=all "$APKTOOL_DIR$IN_DIR/original/META-INF" "$APKTOOL_DIR$IN_DIR/build/apk/META-INF"
+    [ -d "$APKTOOL_DIR$IN_DIR/original/META-INF" ] && cp -a --preserve=all "$APKTOOL_DIR$IN_DIR/original/META-INF" "$APKTOOL_DIR$IN_DIR/build/apk/META-INF"
     apktool -q b -p "$FRAMEWORK_DIR" -srp "$APKTOOL_DIR$IN_DIR"
     [[ -f "$APKTOOL_DIR$IN_DIR/classes.dex" ]] && rm "$APKTOOL_DIR$IN_DIR/"*.dex
 

@@ -19,6 +19,15 @@
 set -eu
 
 # [
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${SRC_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+OUT_DIR="${OUT_DIR:-$SRC_DIR/out}"
+FW_DIR="${FW_DIR:-$OUT_DIR/fw}"
+WORK_DIR="${WORK_DIR:-$OUT_DIR/work_dir}"
+TOOLS_DIR="${TOOLS_DIR:-$OUT_DIR/tools/bin}"
+export PATH="$TOOLS_DIR:$PATH"
+[ -f "$OUT_DIR/config.sh" ] && { set -a; source "$OUT_DIR/config.sh"; set +a; }
+
 COPY_SOURCE_FIRMWARE()
 {
     local MODEL
@@ -27,18 +36,23 @@ COPY_SOURCE_FIRMWARE()
     REGION=$(echo -n "$SOURCE_FIRMWARE" | cut -d "/" -f 2)
 
 # Setup the system partition
-    if [ ! -d "$WORK_DIR/system" ]; then
-        mkdir -p "$WORK_DIR/system"
+    if [ ! -f "$WORK_DIR/system/system/build.prop" ]; then
+        rm -rf "$WORK_DIR/system"
+        if [ ! -d "$FW_DIR/${MODEL}_${REGION}/system" ]; then
+            echo "ERROR: Missing extracted system directory in $FW_DIR/${MODEL}_${REGION}"
+            exit 1
+        fi
         cp -a --preserve=all "$FW_DIR/${MODEL}_${REGION}/system" "$WORK_DIR"
         cp --preserve=all "$FW_DIR/${MODEL}_${REGION}/file_context-system" "$WORK_DIR/configs"
         cp --preserve=all "$FW_DIR/${MODEL}_${REGION}/fs_config-system" "$WORK_DIR/configs"
+    fi
 
 # Differentiate system_ext & product status
     if $SOURCE_HAS_SYSTEM_EXT; then
         if ! $TARGET_HAS_SYSTEM_EXT; then
-            if [ ! -d "$WORK_DIR/system/system/system_ext" ]; then
+            if [ ! -d "$WORK_DIR/system/system/system_ext" ] || [ ! -f "$WORK_DIR/system/system/system_ext/etc/build.prop" ]; then
                 rm -rf "$WORK_DIR/system/system_ext"
-                rm -f "$WORK_DIR/system/system/system_ext"
+                rm -rf "$WORK_DIR/system/system/system_ext"
                 sed -i "/system_ext/d" "$WORK_DIR/configs/file_context-system" \
                     && sed -i "/system_ext/d" "$WORK_DIR/configs/fs_config-system"
                 cp -a --preserve=all "$FW_DIR/${MODEL}_${REGION}/system_ext" "$WORK_DIR/system/system"
@@ -73,7 +87,7 @@ COPY_SOURCE_FIRMWARE()
             # Create file structure: separate system_ext and create new symlinks in rootdir and systemdir
             cp -a -r --preserve=all "$FW_DIR/${MODEL}_${REGION}/system/system/system_ext" "$WORK_DIR"
             rm -rf "$WORK_DIR/system/system/system_ext"
-            rm "$WORK_DIR/system/system_ext"
+            rm -f "$WORK_DIR/system/system_ext"
             mkdir "$WORK_DIR/system/system_ext"
             ln -s "/system_ext" "$WORK_DIR/system/system/system_ext"
             # Create system_ext filesystem configs file by extracting them from system config
@@ -95,9 +109,9 @@ COPY_SOURCE_FIRMWARE()
 
     if $SOURCE_HAS_PRODUCT; then
         if ! $TARGET_HAS_PRODUCT; then
-            if [ ! -d "$WORK_DIR/system/system/product" ]; then
+            if [ ! -d "$WORK_DIR/system/system/product" ] || [ ! -f "$WORK_DIR/system/system/product/etc/build.prop" ]; then
                 rm -rf "$WORK_DIR/system/product"
-                rm -f "$WORK_DIR/system/system/product"
+                rm -rf "$WORK_DIR/system/system/product"
                 sed -i "/product/d" "$WORK_DIR/configs/file_context-system" \
                     && sed -i "/product/d" "$WORK_DIR/configs/fs_config-system"
                 cp -a --preserve=all "$FW_DIR/${MODEL}_${REGION}/product" "$WORK_DIR/system/system"
@@ -132,7 +146,7 @@ COPY_SOURCE_FIRMWARE()
             # Create file structure: separate product and create new symlinks in rootdir and systemdir
             cp -a -r --preserve=all "$FW_DIR/${MODEL}_${REGION}/system/system/product" "$WORK_DIR"
             rm -rf "$WORK_DIR/system/system/product"
-            rm "$WORK_DIR/system/product"
+            rm -f "$WORK_DIR/system/product"
             mkdir "$WORK_DIR/system/product"
             ln -s "/product" "$WORK_DIR/system/system/product"
             # Create product filesystem configs file by extracting them from system config
